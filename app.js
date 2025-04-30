@@ -8,33 +8,34 @@ const Device = require('./models/device');
 const Notification = require('./models/notification');
 require('dotenv').config();
 const dbConnectionString = process.env.DB_CONNECTION_STRING;
-const secretKey = process.env.SECRET_KEY;
-
-
-console.log(dbConnectionString)
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 const PORT = 3000;
-mongoose.connect('mongodb://localhost:27017/mydatabase', { useNewUrlParser: true, useUnifiedTopology: true });
-const mqttClient = mqtt.connect('mqtt://broker.emqx.io:1883');
+mongoose.connect(dbConnectionString, { useNewUrlParser: true, useUnifiedTopology: true });
+const mqttClient = mqtt.connect(process.env.MQTT_SERVER);
 mqttClient.on('connect', () => {
-    mqttClient.subscribe('/VIAQ_Test_Employee/TH-MW01test01');
+    mqttClient.subscribe(process.env.MQTT_TOPIC);
 });
 mqttClient.on('message', (topic, message) => {
     const mqttData = JSON.parse(message.toString());
     const { Temp_Value, Humi_Value } = mqttData;
     const message_time = new Date();
-    amqp.connect('amqp://localhost').then((connection) => {
+    amqp.connect(process.env.RABBITMQ_HOST).then((connection) => {
         return connection.createChannel();
     }).then((channel) => {
-        const queueName = 'dataQueue';
-        const queueNotif = 'notifQueue';
+
+        const md5Hash = crypto.createHash('md5').update((Temp_Value + Humi_Value).toString()).digest('hex');
         const data = {
             Temp_Value: Temp_Value,
             Humi_Value: Humi_Value,
-            lastSaved: message_time
+            lastSaved: message_time,
+            Serial: md5Hash,
         };
-        channel.assertQueue(queueName, { durable: false });
-        channel.assertQueue(queueNotif, { durable: false });
-        channel.sendToQueue(queueName, Buffer.from(JSON.stringify(data)));
+        channel.assertQueue(process.env.RABBITMQ_TOPIC_DEVICE, { durable: false });
+        channel.assertQueue(process.env.RABBITMQ_TOPIC_NOTIF, { durable: false });
+        channel.sendToQueue(process.env.RABBITMQ_TOPIC_DEVICE, Buffer.from(JSON.stringify(data)));
+        channel.sendToQueue(process.env.RABBITMQ_TOPIC_NOTIF, Buffer.from(JSON.stringify(data)));
         // console.log('Message sent to RabbitMQ queue');
     }).catch((error) => {
         console.error('Error connecting to RabbitMQ:', error);
@@ -43,17 +44,14 @@ mqttClient.on('message', (topic, message) => {
 amqp.connect('amqp://localhost').then((connection) => {
     return connection.createChannel();
 }).then((channel) => {
-    const queueName = 'dataQueue';
-    const queueNotif = 'notifQueue';
-    channel.assertQueue(queueName, { durable: false });
-    channel.assertQueue(queueNotif, { durable: false });
-    channel.consume(queueName, (msg) => {
+    channel.assertQueue(process.env.RABBITMQ_TOPIC_DEVICE, { durable: false });
+    channel.assertQueue(process.env.RABBITMQ_TOPIC_NOTIF, { durable: false });
+    channel.consume(process.env.RABBITMQ_TOPIC_DEVICE, (msg) => {
         if (msg !== null) {
             const data = JSON.parse(msg.content.toString());
-            const { Temp_Value, Humi_Value, lastSaved } = data;
-            const tempCheckpoints = { min: 20, max: 30 }; // Sample range for Temp_Value
-            const humiCheckpoints = { min: 40, max: 60 };
-            const md5Hash = crypto.createHash('md5').update((Temp_Value + Humi_Value).toString()).digest('hex');
+            const { Temp_Value, Humi_Value, lastSaved, md5Hash } = data;
+            const tempCheckpoints = { min: process.env.TMP_VAL_MIN, max: process.env.TMP_VAL_MAX }; // Sample range for Temp_Value
+            const humiCheckpoints = { min: process.env.HUMI_VAL_MIN, max: process.env.HUMI_VAL_MAX };
             const deviceData = {
                 serialNumber: md5Hash,
                 Temp_Value,
@@ -65,40 +63,53 @@ amqp.connect('amqp://localhost').then((connection) => {
                 }
             };
 
-            const device = new Device(deviceData);
-            device.save()
-            // .then(() => {
-            //     console.log('Data saved to MongoDB');
-            // }).catch((err) => {
-            //     console.error('Error saving data to MongoDB:', err);
-            // });
+            // const foundDevice = Device.findOne({ md5Hash });
+            // if (!foundDevice) {
+                const device = new Device(deviceData);
+                device.save()
+                // .then(() => {
+                //     console.log('Data saved to MongoDB');
+                // }).catch((err) => {
+                //     console.error('Error saving data to MongoDB:', err);
+                // });
+            // }
 
-            if (Temp_Value >= tempCheckpoints.min || Temp_Value <= tempCheckpoints.max ||
-                Humi_Value >= humiCheckpoints.min || Humi_Value <= humiCheckpoints.max) {
-                const notificationData = {
-                    deviceId: device._id, 
-                    parameter: 'Temperature and Humidity',
-                    value: md5Hash, 
-                    timestamp: new Date()
-                };
-                channel.sendToQueue(queueNotif, Buffer.from(JSON.stringify(notificationData)));
-            }
+
             channel.ack(msg);
         }
     });
 
 
-    channel.consume(queueNotif, (msg) => {
+    channel.consume(process.env.RABBITMQ_TOPIC_NOTIF, async (msg) => {
         if (msg !== null) {
-            const notificationData = JSON.parse(msg.content.toString());
-            const notification = new Notification(notificationData);
-            notification.save()
-            // .then(() => {
-            //     console.log('Notification saved to MongoDB');
-            // }).catch((err) => {
-            //     console.error('Error saving notification to MongoDB:', err);
-            // });
+            const data = JSON.parse(msg.content.toString());
+            const { Temp_Value, Humi_Value, lastSaved, md5Hash } = data;
+            const tempCheckpoints = { min: process.env.TMP_VAL_MIN, max: process.env.TMP_VAL_MAX }; // Sample range for Temp_Value
+            const humiCheckpoints = { min: process.env.HUMI_VAL_MIN, max: process.env.HUMI_VAL_MAX };
 
+            const serialNumber = md5Hash
+            const device = await Device.findOne({ serialNumber });
+            if (!device) {
+                console.log("device by this serial not found")
+            } else {
+                if (Temp_Value >= tempCheckpoints.min || Temp_Value <= tempCheckpoints.max ||
+                    Humi_Value >= humiCheckpoints.min || Humi_Value <= humiCheckpoints.max) {
+                        const notificationData = {
+                        deviceId: device._id,
+                        parameter: 'Temperature and Humidity',
+                        value: "serialNumber",
+                        timestamp: lastSaved,
+                    };
+                    const notification = new Notification(notificationData);
+                    await  notification.save()
+                    // .then(() => {
+                    //     console.log('Notification saved to MongoDB');
+                    // }).catch((err) => {
+                    //     console.error('Error saving notification to MongoDB:', err);
+                    // });
+                    // channel.sendToQueue(process.env.RABBITMQ_TOPIC_NOTIF, Buffer.from(JSON.stringify(notificationData)));
+                }
+            }
             channel.ack(msg);
         }
     });

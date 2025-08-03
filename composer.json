@@ -1,0 +1,18 @@
+{
+    "name": "mehrdad/test-hr",
+    "autoload": {
+        "psr-4": {
+            "Mehrdad\\TestHr\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "mehrdad rezaee",
+            "email": "mehrdad3131r@gmail.com"
+        }
+    ],
+    "require": {
+        "mongodb/mongodb": "^1.11",
+        "firebase/php-jwt": "^5.4"
+    }
+}

@@ -1,34 +1,62 @@
-# پروژه تست استخدام توسعه‌دهنده بک‌اند
+# Server-Side API and Logic Evaluation
 
-**تبریک!** شما با موفقیت به این مرحله از فرآیند استخدام راه یافته‌اید. ما از علاقه و استعداد شما برای پیوستن به تیم خود هیجان‌زده‌ایم.
+## Task Overview
 
-در این مرحله، از شما میخواهیم تا یک پروژه کوچک بک‌اند را پیاده‌سازی کنید. هدف از این پروژه ارزیابی مهارت‌های فنی شما در زمینه‌های مختلف از جمله کار با Brokerهای پیام (MQTT و RabbitMQ)، پایگاه داده (MongoDB)، APIهای RESTful (Express.js) و مدیریت لاگ‌ها است.
+1. **Simple Login API**
+    - **API Endpoint:** `POST /api/login`
+    - **Request Data (DTO):**
+        ```json
+        {
+          "phone": "09120000000",
+          "password": "123456"
+        }
+        ```
+    - **Output:** Authentication token for use in subsequent requests.
 
-**شرح پروژه:**
+---
 
-شما باید یک سرویس بک‌اند ایجاد کنید که وظایف زیر را انجام دهد:
+2. **Record Provider Location and Online Status**
+    - **API Endpoint:** `POST /api/provider/location/update`
+    - **Request Data (DTO):**
+        ```json
+        {
+          "lat": 35.7001,
+          "lng": 51.4099,
+          "is_online": true
+        }
+        ```
 
-1.  **اتصال به EMQX Public Broker:** سرویس شما باید به Broker عمومی EMQX با مشخصات زیر متصل شود:
-    * آدرس: `mqtt://broker.emqx.io:1883`
-    * قابلیت اتصال مجدد در صورت قطع ارتباط.
+---
 
-2.  **اتصال به RabbitMQ:** سرویس شما همچنین باید به RabbitMQ متصل شود (جزئیات اتصال از طریق `docker-compose.yml` ارائه شده است).
+3. **Request List of Active Service Providers Near the User**
+    - **API Endpoint:** `GET /api/providers/nearby?lat=35.7021&lng=51.4031`
+    - **Sample Output:**
+        ```json
+        {
+          "status": "success",
+          "providers": [
+            { 
+              "id": 12,
+              "name": "Ali",
+              "lat": 35.7010,
+              "lng": 51.4040
+            },
+            { 
+              "id": 17,
+              "name": "Sara",
+              "lat": 35.7002,
+              "lng": 51.4050
+            }
+          ]
+        }
+        ```
 
-3.  **دریافت و ارسال داده MQTT:** هر داده‌ای که به تاپیک `/VIAQ_Test_Employee/TH-MW01test01` از طریق MQTT می‌رسد، باید توسط سرویس شما دریافت شده و از طریق RabbitMQ به دو صف (Queue) مختلف ارسال شود.
+---
 
-4.  **ذخیره‌سازی داده در MongoDB:**
-    * یک سرویس باید یک صف در RabbitMQ را consume کند.
-    * داده‌های دریافت شده از این صف باید در پایگاه داده MongoDB ذخیره شوند.
-    * شما باید یک مدل Mongoose برای اطلاعات دستگاه طراحی کنید که شامل فیلدهای **`serialNumber` (ضروری)**، **`checkpoints` (ضروری)** و **`lastSaved` (ضروری)** باشد.
+## Bonus Question
 
-5.  **مانیتورینگ و ثبت Notification:**
-    * سرویس دیگری باید صف دوم در RabbitMQ را consume کند.
-    * این سرویس باید اطلاعات مربوط به دستگاه را بر اساس `serialNumber` از MongoDB بخواند. مدل `Device` شامل فیلدی به نام `checkpoints` است که بازه‌های مجاز برای هر پارامتر (`Temp_Value` و `Humi_Value`) را مشخص می‌کند.
-    * اگر مقدار هر پارامتر دریافت شده از MQTT (از طریق RabbitMQ) خارج از بازه تعریف شده در `checkpoints` باشد، باید یک Notification در MongoDB ذخیره شود.
-    * شما باید یک مدل Mongoose برای Notification طراحی کنید که شامل فیلدهای **`deviceId` (ضروری)**، **`parameter` (ضروری)**، **`value` (ضروری)** و **`timestamp` (ضروری)** باشد.
+If you are familiar with WebSocket, provide a simple implementation that notifies online and nearby service providers in real-time when a new request is made.
 
-6.  **ایجاد REST API با Express.js:**
-    * یک API با استفاده از Express.js ایجاد کنید.
-    * این API باید شامل دو Route زیر باشد:
-        * `/devices`: این Route باید **۱۰ داده آخر** ذخیره شده برای هر دستگاه را به همراه تاریخ و ساعت (دقیقه و ثانیه) نمایش دهد.
-        * `/notifications`: این Route باید **۱۰ Notification آخر** ذخیره شده را نمایش دهد.
+---
+
+Feel free to expand upon these tasks and bonus question as needed for your evaluation. Good luck with the task! 🚀

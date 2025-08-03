@@ -1,27 +1,19 @@
 version: '3.8'
+
 services:
-  # mongodb:
-  #   image: mongo:latest
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongodb_data:/data/db
-  #   networks:
-  #     - app_network
-  rabbitmq:
-    image: rabbitmq:3-management
+  php:
+    image: php:7.4-apache
+    container_name: my-php-app
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    networks:
-      - app_network
+      - "8000:80"
+    volumes:
+      - ./src:/var/www/html
+
+  mongo:
+    image: mongo
+    container_name: my-mongo-db
+    ports:
+      - "27017:27017"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-
-networks:
-  app_network:
-    driver: bridge
-
-volumes:
-  mongodb_data:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example

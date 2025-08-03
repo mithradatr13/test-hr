@@ -4,20 +4,24 @@ use Swoole\Http\Response;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server;
 
-// Simulated database connection to MongoDB
-$mongoClient = new MongoDB\Client("mongodb://localhost:27017");
+
+require_once 'vendor/autoload.php';
+use \Firebase\JWT\JWT;
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Access environment variables
+$mongoUrl = $_ENV['MONGO_URL'];
+$appPort = $_ENV['PORT_HTTP'];
+$wsPort = $_ENV['PORT_WS'];
+$secret_key = 'your_secret_key';
+
+$mongoClient = new MongoDB\Client($mongoUrl);
 $usersCollection = $mongoClient->selectDatabase('service_request')->selectCollection('users');
 $providersCollection = $mongoClient->selectDatabase('service_request')->selectCollection('providers');
 
-// Include JWT library
-require_once 'vendor/autoload.php';
-use \Firebase\JWT\JWT;
-
-// JWT secret key
-$secret_key = 'your_secret_key';
-
-$httpServer = new Swoole\Http\Server("0.0.0.0", 9501);
-$wsServer = new Server("0.0.0.0", 9502);
+$httpServer = new Swoole\Http\Server("0.0.0.0", $appPort);
+$wsServer = new Server("0.0.0.0", $wsPort);
 
 // API endpoints
 $httpServer->on('request', function (Request $request, Response $response) use ($mongoClient, $usersCollection, $providersCollection, $secret_key) {
@@ -26,7 +30,7 @@ $httpServer->on('request', function (Request $request, Response $response) use (
     if ($request->server['request_uri'] === '/api/login' && $request->server['request_method'] === 'POST') {
         $data = json_decode($request->rawContent(), true);
 
-        $user = $usersCollection->findOne(['phone' => $data['phone'], 'password' => $data['password']);
+        $user = $usersCollection->findOne(['phone' => $data['phone'], 'password' => $data['password']]);
 
         if ($user) {
             $token = JWT::encode(['phone' => $data['phone']], $secret_key, 'HS256');
@@ -49,7 +53,7 @@ $httpServer->on('request', function (Request $request, Response $response) use (
 
         $providersCollection->updateOne(
             ['phone' => $provider_phone],
-            ['$set' => ['lat' => $data['lat'], 'lng' => $data['lng'], 'is_online' => $data['is_online']]
+            ['$set' => ['lat' => $data['lat'], 'lng' => $data['lng'], 'is_online' => $data['is_online']]]
         );
 
         $response->end(json_encode(['message' => 'Location and online status updated successfully']));

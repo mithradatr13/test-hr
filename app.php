@@ -74,7 +74,7 @@ $httpServer->on('request', function (Request $request, Response $response) use (
 
         $providersCollection->updateOne(
             ['phone' => $provider_phone],
-            ['$set' => ['lat' => $data['lat'], 'lng' => $data['lng'], 'is_online' => $data['is_online']]]
+            ['$set' => ['lat' => $data['lat'], 'lng' => $data['lng'], 'is_online' => true]]
         );
 
         $response->end(json_encode(['message' => 'Location and online status updated successfully']));
@@ -98,14 +98,23 @@ $httpServer->on('request', function (Request $request, Response $response) use (
     $router->execute($request, $response);
 
     $wsServer->on('message', function (Server $server, Frame $frame) use ($wsServer, $providersCollection) {
-        foreach ($server->connections as $fd) {
-            $server->push($fd, $frame->data);
-        }
-
-        // Handle real-time notifications to all providers
-        $providers = $providersCollection->find();
-        foreach ($providers as $provider) {
-            $server->push($provider['fd'], $frame->data);
+        $messageData = json_decode($frame->data, true); 
+        if ($messageData && isset($messageData['lat'], $messageData['lng'])) {
+            $lat = $messageData['lat'];
+            $lng = $messageData['lng'];
+            foreach ($server->connections as $fd) {
+                $server->push($fd, $frame->data);
+            }
+            $providers = $providersCollection->find([
+                'lat' => ['$gte' => $lat - 0.01, '$lte' => $lat + 0.01],
+                'lng' => ['$gte' => $lng - 0.01, '$lte' => $lng + 0.01],
+                'is_online' => true
+            ]);
+            foreach ($providers as $provider) {
+                $server->push($provider['fd'], $frame->data);
+            }
+        } else {
+            echo "Latitude and longitude not found in the message data.\n";
         }
     });
     $wsServer->start();

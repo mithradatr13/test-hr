@@ -3,6 +3,7 @@ use Swoole\Http\Request;
 use Swoole\Http\Response;
 use Swoole\WebSocket\Frame;
 use Swoole\WebSocket\Server;
+// use Dotenv\Dotenv;
 
 
 require_once 'vendor/autoload.php';
@@ -13,21 +14,41 @@ $dotenv->load();
 // Access environment variables
 $mongoUrl = $_ENV['MONGO_URL'];
 $appPort = $_ENV['PORT_HTTP'];
-$wsPort = $_ENV['PORT_WS'];
+
 $secret_key = 'your_secret_key';
 
 $mongoClient = new MongoDB\Client($mongoUrl);
-$usersCollection = $mongoClient->selectDatabase('service_request')->selectCollection('users');
-$providersCollection = $mongoClient->selectDatabase('service_request')->selectCollection('providers');
+$usersCollection = $mongoClient->selectDatabase($_ENV['DATABASE_NAME'])->selectCollection('users');
+$providersCollection = $mongoClient->selectDatabase($_ENV['DATABASE_NAME'])->selectCollection('providers');
 
 $httpServer = new Swoole\Http\Server("0.0.0.0", $appPort);
-$wsServer = new Server("0.0.0.0", $wsPort);
 
+$httpServer->on('start', function () {
+    echo "Swoole HTTP server started at http:/localhost:9502\n";
+    $userData = [
+        "phone" => "09120000000",
+        "password" => "123456"
+    ];
+    $userExists = checkUserExistence($userData['phone']);
+    if (!$userExists) {
+        createUser($userData);
+        echo "User created successfully\n";
+    } else {
+        echo "User already exists\n";
+    }
+
+});
 // API endpoints
 $httpServer->on('request', function (Request $request, Response $response) use ($mongoClient, $usersCollection, $providersCollection, $secret_key) {
-    $response->header("Content-Type", "application/json");
 
-    if ($request->server['request_uri'] === '/api/login' && $request->server['request_method'] === 'POST') {
+
+    $response->header("Content-Type", "application/json");
+    $wsPort = $_ENV['PORT_WS'];
+    $wsServer = new Server("0.0.0.0", $wsPort);
+
+    $router = new \Swoole\Http\Router();
+
+    $router->post('/api/login', function () use ($request, $response, $usersCollection, $secret_key) {
         $data = json_decode($request->rawContent(), true);
 
         $user = $usersCollection->findOne(['phone' => $data['phone'], 'password' => $data['password']]);
@@ -41,9 +62,9 @@ $httpServer->on('request', function (Request $request, Response $response) use (
             $response->end(json_encode(['error' => 'Invalid credentials']));
             return;
         }
-    }
+    });
 
-    if ($request->server['request_uri'] === '/api/provider/location/update' && $request->server['request_method'] === 'POST') {
+    $router->post('/api/provider/location/update', function () use ($request, $response, $providersCollection, $secret_key) {
         $data = json_decode($request->rawContent(), true);
 
         $jwt_token = $request->header['authorization'];
@@ -58,9 +79,9 @@ $httpServer->on('request', function (Request $request, Response $response) use (
 
         $response->end(json_encode(['message' => 'Location and online status updated successfully']));
         return;
-    }
+    });
 
-    if ($request->server['request_uri'] === '/api/providers/nearby' && $request->server['request_method'] === 'GET') {
+    $router->get('/api/providers/nearby', function () use ($request, $response, $providersCollection) {
         $lat = $request->get['lat'];
         $lng = $request->get['lng'];
 
@@ -72,24 +93,46 @@ $httpServer->on('request', function (Request $request, Response $response) use (
 
         $response->end(json_encode(['status' => 'success', 'providers' => $nearby_providers->toArray()]));
         return;
-    }
+    });
 
-    $response->status(404);
-    $response->end(json_encode(['error' => 'Invalid API endpoint']));
+    $router->execute($request, $response);
+
+    $wsServer->on('message', function (Server $server, Frame $frame) use ($wsServer, $providersCollection) {
+        foreach ($server->connections as $fd) {
+            $server->push($fd, $frame->data);
+        }
+
+        // Handle real-time notifications to all providers
+        $providers = $providersCollection->find();
+        foreach ($providers as $provider) {
+            $server->push($provider['fd'], $frame->data);
+        }
+    });
+    $wsServer->start();
+
+
 });
 
-// WebSocket server
-$wsServer->on('message', function (Server $server, Frame $frame) use ($wsServer, $providersCollection) {
-    foreach ($server->connections as $fd) {
-        $server->push($fd, $frame->data);
-    }
 
-    // Handle real-time notifications to all providers
-    $providers = $providersCollection->find();
-    foreach ($providers as $provider) {
-        $server->push($provider['fd'], $frame->data);
+function checkUserExistence($phone)
+{
+    $client = new MongoDB\Client($_ENV['MONGO_URL']);
+    $collection = $client->selectDatabase($_ENV['DATABASE_NAME'])->selectCollection('users');
+    $user = $collection->findOne(['phone' => $phone]);
+    return ($user !== null);
+}
+
+function createUser($userData)
+{
+    $client = new MongoDB\Client($_ENV['MONGO_URL']);
+    $collection = $client->selectDatabase($_ENV['DATABASE_NAME'])->selectCollection('users');
+    $insertResult = $collection->insertOne($userData);
+    if ($insertResult->getInsertedCount() === 1) {
+        echo "User created with phone: {$userData['phone']} and password: {$userData['password']}\n";
+    } else {
+        echo "Failed to create user\n";
     }
-});
+}
 
 $httpServer->start();
-$wsServer->start();
+

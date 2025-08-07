@@ -1,62 +1,36 @@
-# Server-Side API and Logic Evaluation
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Task Overview
+## Getting Started
 
-1. **Simple Login API**
-    - **API Endpoint:** `POST /api/login`
-    - **Request Data (DTO):**
-        ```json
-        {
-          "phone": "09120000000",
-          "password": "123456"
-        }
-        ```
-    - **Output:** Authentication token for use in subsequent requests.
+First, run the development server:
 
----
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
-2. **Record Provider Location and Online Status**
-    - **API Endpoint:** `POST /api/provider/location/update`
-    - **Request Data (DTO):**
-        ```json
-        {
-          "lat": 35.7001,
-          "lng": 51.4099,
-          "is_online": true
-        }
-        ```
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
----
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-3. **Request List of Active Service Providers Near the User**
-    - **API Endpoint:** `GET /api/providers/nearby?lat=35.7021&lng=51.4031`
-    - **Sample Output:**
-        ```json
-        {
-          "status": "success",
-          "providers": [
-            { 
-              "id": 12,
-              "name": "Ali",
-              "lat": 35.7010,
-              "lng": 51.4040
-            },
-            { 
-              "id": 17,
-              "name": "Sara",
-              "lat": 35.7002,
-              "lng": 51.4050
-            }
-          ]
-        }
-        ```
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
----
+## Learn More
 
-## Bonus Question
+To learn more about Next.js, take a look at the following resources:
 
-If you are familiar with WebSocket, provide a simple implementation that notifies online and nearby service providers in real-time when a new request is made.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
----
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-Feel free to expand upon these tasks and bonus question as needed for your evaluation. Good luck with the task! 🚀
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
